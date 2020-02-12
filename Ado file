@@ -1,0 +1,51 @@
+====Description of study objectives====
+///This is an example of the code used for the study titled "Association of Bariatric Interventions and Sex with the Spectrum and Temporal Course of Micronutrient and Endocrine Disturbances", published in JAMA Network Open
+///The analysis uses inverse probability of treatment weighting (IPTW) based on propensity-scores.
+///To address missing data, multiple imputation was also performed.
+
+====Notes on the coding of variables====
+///In this example, "alb_" refers to serum albumin levels.
+///The data are initially in wide format, with "alb_0 alb_1 alb_3 alb_6 alb_9 alb_12 alb_18 alb_24 alb_30 alb_36 alb_48 alb_60" representing the variables for albumin levels at various months
+
+///The exposure (or treatment) variable here is bariatric bypass (ie. malabsorptive) versus restrictive surgeries, coded as 0 and 1 respectively.
+
+///The identifier variable (which denotes unique individuals) is "nric"
+
+
+====An example of the code used to analyze albumin levels at longitudinal timepoints====
+///Set up multiple imputation
+"Refer to https://stats.idre.ucla.edu/stata/faq/how-can-i-perform-multiple-imputation-on-longitudinal-data-using-ice/ for details of longitudinal data imputation"
+
+mi set wide
+mi register imputed bmi_0 age alb_*
+mi impute chained (regress) bmi_0 age alb_* = type_0bypass_1restrict, add(50) rseed(1234) 
+
+
+///Develop propensity score model
+mi estimate, or saving(miestfile, replace): logit type_0bypass_1restrict bmi_0 i.glycemic_status i.sex age
+mi predict xb using miestfile
+mi xeq: gen phat = invlogit(xb)
+
+
+///Calculate IPTW weights
+gen iptw = 1/phat
+replace iptw = 1/(1-phat) if type_0bypass_1restrict == 0
+
+
+///Check discrimination of PS model
+roctab type_0bypass_1restrict phat, graph
+
+
+///Check calibration of PS model
+hl, plot
+
+
+///Reshape wide to long
+mi reshape long  alb_ , i(nric) j(month)
+
+
+///Run analysis with IPTW-weighting
+"Refer to https://stats.idre.ucla.edu/stata/seminars/repeated-measures-analysis-with-stata/ for details of analyzing longitudinal data with xtmixed command, and obtaining predictive margins"
+mi estimate, saving(miestfile, replace) : xtmixed alb_ i.month##i.type_0bypass_1restrict i.sex || nric: month [pw=iptw], var ml nolog robust
+mimrgns type_0bypass_1restrict#month, cmdmargins
+marginsplot, x(month) title("") legend(off) xtitle("Time, mo", size(medlarge)) ytitle("Albumin, g/L (IPTW-adjusted)", size(medlarge)) xlabel(0 1 3 6 9 12 18 24 30 36 48 60, labsize(medlarge)) ylabel(,angle(0) labsize(medlarge)) graphregion(color(white) margin(zero)) byopt(title("")) level(`=round((normal(1)-normal(-1))*100,.01)') recastci(rarea) ci1opt(lcolor("254 208 158") fcolor("247 146 27") color(%50))  ci2opt(lcolor("153 173 181") fcolor("41 82 94") color(%50)) plot1opts(mcolor("247 146 27") lcolor("247 146 27")) plot2opts(mcolor("41 82 94") lcolor("41 82 94"))
