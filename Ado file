@@ -21,7 +21,7 @@ mi register imputed bmi_0 age alb_*
 mi impute chained (regress) bmi_0 age alb_* = type_0bypass_1restrict, add(50) rseed(1234) 
 
 
-///Develop propensity score model
+///Develop propensity score model. Can use either a logistic model or LASSO logistic model; in our case, they give identical results.
 mi estimate, or saving(miestfile, replace): logit type_0bypass_1restrict bmi_0 i.glycemic_status i.sex age
 mi predict xb using miestfile
 mi xeq: gen phat = invlogit(xb)
